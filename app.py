@@ -10,37 +10,60 @@ def image_enhancement(img, method):
     if method == 'Noise Reduction - Non-local Means':
         return cv2.fastNlMeansDenoisingColored(img, None, 10, 10, 7, 21)
     elif method == 'Wavelet Denoising':
-        return denoise_wavelet(img, multichannel=True)
+        return denoise_wavelet(img, channel_axis=-1)
     elif method == 'Histogram Equalization':
         img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         equalized = cv2.equalizeHist(img_gray)
         return cv2.cvtColor(equalized, cv2.COLOR_GRAY2BGR)
     elif method == 'Contrast Limited AHE':
         img_lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
-        lab_planes = cv2.split(img_lab)
+        lab_planes = list(cv2.split(img_lab))  # Convert to list
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         lab_planes[0] = clahe.apply(lab_planes[0])
-        lab = cv2.merge(lab_planes)
+        lab = cv2.merge(lab_planes)  # Merge back into a single image
         return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
     return img
 
 # Define Feature Detection Techniques
 def feature_detection(img, method):
+    if img is None or img.size == 0:
+        raise ValueError("Image is empty or not loaded correctly.")
+
+    # Ensure image is in uint8 format for compatibility with OpenCV functions
+    if img.dtype != np.uint8:
+        img = (img * 255).astype(np.uint8)
+
+    # Convert to grayscale for feature detection methods
+    if method in ['SIFT', 'SURF', 'Canny Edge Detection', 'Blob Detection']:
+        if len(img.shape) == 3:
+            img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        else:
+            img_gray = img  # Already grayscale
+
     if method == 'SIFT':
         sift = cv2.SIFT_create()
-        keypoints, descriptors = sift.detectAndCompute(img, None)
-        img = cv2.drawKeypoints(img, keypoints, None)
+        keypoints, descriptors = sift.detectAndCompute(img_gray, None)
+        img = cv2.drawKeypoints(img, keypoints, None, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+
     elif method == 'SURF':
-        surf = cv2.xfeatures2d.SURF_create(400)
-        keypoints, descriptors = surf.detectAndCompute(img, None)
-        img = cv2.drawKeypoints(img, keypoints, None)
+        try:
+            surf = cv2.xfeatures2d.SURF_create(400)
+            keypoints, descriptors = surf.detectAndCompute(img_gray, None)
+            img = cv2.drawKeypoints(img, keypoints, None, flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+        except AttributeError:
+            st.error("SURF is not available in this OpenCV installation. Using ORB instead.")
+            method = 'ORB'  # Fallback to ORB
+
+            
     elif method == 'Canny Edge Detection':
-        edges = cv2.Canny(img, 100, 200)
-        return cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+        edges = cv2.Canny(img_gray, 100, 200)
+        img = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+
     elif method == 'Blob Detection':
         detector = cv2.SimpleBlobDetector_create()
-        keypoints = detector.detect(img)
-        img = cv2.drawKeypoints(img, keypoints, np.array([]), (0,0,255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+        keypoints = detector.detect(img_gray)
+        img = cv2.drawKeypoints(img, keypoints, np.array([]), (0, 0, 255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+
     return img
 
 # Define Segmentation Techniques
